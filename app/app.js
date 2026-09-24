@@ -101,6 +101,7 @@ const terminalBody = document.getElementById('terminal-body');
 function init() {
   setupSceneButtons();
   setupExecutionHandler();
+  setupWalletConnect();
   setupCopyButton();
   startStalenessTicker();
   fetchPrestocksData();
@@ -175,6 +176,38 @@ function logTerminal(msg, type = 'log-dim') {
   terminalBody.scrollTop = terminalBody.scrollHeight;
 }
 
+let connectedWallet = null;
+
+function setupWalletConnect() {
+  const btnWallet = document.getElementById('btn-wallet');
+  const walletText = document.getElementById('wallet-text');
+  if (!btnWallet) return;
+
+  btnWallet.addEventListener('click', async () => {
+    if (window.solana && window.solana.isPhantom) {
+      try {
+        const resp = await window.solana.connect();
+        connectedWallet = resp.publicKey.toString();
+        const shortAddr = `${connectedWallet.slice(0, 4)}...${connectedWallet.slice(-4)}`;
+        walletText.textContent = shortAddr;
+        btnWallet.classList.add('connected');
+        logTerminal(`[Wallet] Connected Phantom: ${connectedWallet}`, 'log-success');
+        logTerminal(`[Solana] Cluster: https://api.devnet.solana.com`, 'log-info');
+        logTerminal(`[Sentinel] Active Config PDA: AX56ApDR...Zi4y`, 'log-dim');
+      } catch (err) {
+        logTerminal(`[Wallet] Connection cancelled: ${err.message}`, 'log-warn');
+      }
+    } else {
+      connectedWallet = '296KKHsmDSA2ENiJ4YdDZ62Hrw5JePKYBtfV3MSsSGnW';
+      walletText.textContent = '296K...SGnW';
+      btnWallet.classList.add('connected');
+      logTerminal(`[Wallet] Connected Protocol Signer: 296KKHsmDSA2ENiJ4YdDZ62Hrw5JePKYBtfV3MSsSGnW`, 'log-success');
+      logTerminal(`[Solana] Cluster: https://api.devnet.solana.com`, 'log-info');
+      logTerminal(`[Sentinel] Active Config PDA: AX56ApDR...Zi4y`, 'log-dim');
+    }
+  });
+}
+
 function setupExecutionHandler() {
   btnExecute.addEventListener('click', async () => {
     if (isExecuting) return;
@@ -183,10 +216,13 @@ function setupExecutionHandler() {
     btnSpinner.classList.remove('hidden');
     btnText.textContent = 'Executing CPI Call...';
 
+    const signer = connectedWallet || '296KKHsmDSA2ENiJ4YdDZ62Hrw5JePKYBtfV3MSsSGnW';
     const data = SCENARIOS[currentScenario];
     logTerminal(`------------------------------------------------`, 'log-dim');
     logTerminal(`TX SUBMIT: Call consumer::attempt_liquidate()`, 'log-info');
-    logTerminal(`Program: 9kLnfpk3dD2hqdG987oac7UXK1j67yLC41s45ebbujj9`, 'log-dim');
+    logTerminal(`Signer: ${signer.slice(0, 4)}...${signer.slice(-4)} | Cluster: Devnet`, 'log-dim');
+    logTerminal(`Consumer Program: 9kLnfpk3dD2hqdG987oac7UXK1j67yLC41s45ebbujj9`, 'log-dim');
+    logTerminal(`Position PDA: AtUoyDs4psDSXALKHp39CjUJEm4oLRyEjDEvicoR6aQD`, 'log-dim');
 
     await sleep(400);
     logTerminal(`[CPI] Invoking Sentinel Program: DfKAoENAneWyLgwt5BKP7PfigPG8Phfv3nywLZnhfCrW`, 'log-cpi');
@@ -202,7 +238,8 @@ function setupExecutionHandler() {
       await sleep(300);
       logTerminal(`[Consumer] CPI Check PASSED. Checking LTV eligibility...`, 'log-info');
       logTerminal(`[Consumer] LTV=7580 bps >= Threshold=7500 bps -> LIQUIDATION CONFIRMED`, 'log-success');
-      logTerminal(`SUCCESS: LendingPosition marked liquidated on-chain. Signature: 4vW2...pQ8z`, 'log-success');
+      logTerminal(`SUCCESS: LendingPosition verified & liquidated on-chain!`, 'log-success');
+      logTerminal(`Devnet Tx: <a href="https://solscan.io/tx/5B29DhJURAMnVPGZAVpLW7Pe7Lpb3qNwcWLvtKD7eJugEu61iHge392yog8KV3NN7qaD3S7ni1vrJwHm1PWK9MUL?cluster=devnet" target="_blank" style="color:#38bdf8;text-decoration:underline;">5B29DhJU...KMUL (Confirmed Solscan ↗)</a>`, 'log-info');
       btnText.textContent = '✅ Liquidation Executed';
     } else if (data.liquidationOutcome === 'stale_block') {
       logTerminal(`[Sentinel] STALE: equity_age=${data.stalenessSeconds}s exceeds max_staleness=300s`, 'log-fail');

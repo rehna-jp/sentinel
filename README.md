@@ -153,12 +153,16 @@ fn normalize_price(price: i64, exponent: i32) -> Result<u64> {
 
 ---
 
-## 6. Live Solana Devnet Deployments
+## 6. Live Solana Devnet Deployments & Verified On-Chain State
 
-| Program Name | Program ID | Deployment Details | Explorer |
+| Program / Account | Address / Signature | Role | Explorer |
 |---|---|---|---|
-| **Sentinel Checker** | `DfKAoENAneWyLgwt5BKP7PfigPG8Phfv3nywLZnhfCrW` | On-chain safety engine & circuit breaker | [Solscan](https://solscan.io/account/DfKAoENAneWyLgwt5BKP7PfigPG8Phfv3nywLZnhfCrW?cluster=devnet) / [Solana Explorer](https://explorer.solana.com/address/DfKAoENAneWyLgwt5BKP7PfigPG8Phfv3nywLZnhfCrW?cluster=devnet) |
-| **Consumer Demo** | `9kLnfpk3dD2hqdG987oac7UXK1j67yLC41s45ebbujj9` | Lending protocol gated via Sentinel CPI | [Solscan](https://solscan.io/account/9kLnfpk3dD2hqdG987oac7UXK1j67yLC41s45ebbujj9?cluster=devnet) / [Solana Explorer](https://explorer.solana.com/address/9kLnfpk3dD2hqdG987oac7UXK1j67yLC41s45ebbujj9?cluster=devnet) |
+| **Sentinel Checker** | `DfKAoENAneWyLgwt5BKP7PfigPG8Phfv3nywLZnhfCrW` | On-chain safety engine & circuit breaker | [Solscan](https://solscan.io/account/DfKAoENAneWyLgwt5BKP7PfigPG8Phfv3nywLZnhfCrW?cluster=devnet) |
+| **Sentinel Config PDA** | `AX56ApDRD1aqvNZr64ypfVvCY8s6uypHd61Ry2FrZi4y` | Initialized invariant configuration | [Solscan](https://solscan.io/account/AX56ApDRD1aqvNZr64ypfVvCY8s6uypHd61Ry2FrZi4y?cluster=devnet) |
+| **Init Transaction** | `u1APtMkF8pfKdpu7gc6siyipNe58DSBTuVUmvmyyj4HdukMNVPtZae1iWuyyZ8EVVeTAyTomf2r3VB8TYL7sw3t` | Verified Sentinel initialization | [Solscan](https://solscan.io/tx/u1APtMkF8pfKdpu7gc6siyipNe58DSBTuVUmvmyyj4HdukMNVPtZae1iWuyyZ8EVVeTAyTomf2r3VB8TYL7sw3t?cluster=devnet) |
+| **Consumer Demo** | `9kLnfpk3dD2hqdG987oac7UXK1j67yLC41s45ebbujj9` | Lending protocol gated via Sentinel CPI | [Solscan](https://solscan.io/account/9kLnfpk3dD2hqdG987oac7UXK1j67yLC41s45ebbujj9?cluster=devnet) |
+| **Lending Position PDA** | `AtUoyDs4psDSXALKHp39CjUJEm4oLRyEjDEvicoR6aQD` | Verified mock position on Devnet | [Solscan](https://solscan.io/account/AtUoyDs4psDSXALKHp39CjUJEm4oLRyEjDEvicoR6aQD?cluster=devnet) |
+| **Position Tx** | `5B29DhJURAMnVPGZAVpLW7Pe7Lpb3qNwcWLvtKD7eJugEu61iHge392yog8KV3NN7qaD3S7ni1vrJwHm1PWK9MUL` | Verified position creation | [Solscan](https://solscan.io/tx/5B29DhJURAMnVPGZAVpLW7Pe7Lpb3qNwcWLvtKD7eJugEu61iHge392yog8KV3NN7qaD3S7ni1vrJwHm1PWK9MUL?cluster=devnet) |
 
 * **Upgrade Authority:** `296KKHsmDSA2ENiJ4YdDZ62Hrw5JePKYBtfV3MSsSGnW`
 * **Equity Feed ID:** `Equity.US.AAPL/USD`
