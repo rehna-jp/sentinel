@@ -377,8 +377,9 @@ function setupExecutionHandler() {
       await sleep(300);
       logTerminal(`[Consumer] CPI Check PASSED. Checking LTV eligibility...`, 'log-info');
       logTerminal(`[Consumer] LTV=7580 bps >= Threshold=7500 bps -> LIQUIDATION CONFIRMED`, 'log-success');
-      logTerminal(`SUCCESS: LendingPosition verified & liquidated on-chain!`, 'log-success');
-      logTerminal(`Devnet Tx: <a href="https://solscan.io/tx/5B29DhJURAMnVPGZAVpLW7Pe7Lpb3qNwcWLvtKD7eJugEu61iHge392yog8KV3NN7qaD3S7ni1vrJwHm1PWK9MUL?cluster=devnet" target="_blank" style="color:#38bdf8;text-decoration:underline;">5B29DhJU...KMUL (Confirmed Solscan ↗)</a>`, 'log-info');
+      logTerminal(`SIMULATION SUCCESS: All on-chain invariants verified (Safe to Act)`, 'log-success');
+      logTerminal(`Liquidation criteria met: LTV 75.80% >= 75.00% threshold.`, 'log-info');
+      logTerminal(`[Tip] Connect a Solana wallet above to sign & broadcast a live Devnet transaction.`, 'log-dim');
       btnText.textContent = '✅ Liquidation Executed';
     } else if (data.liquidationOutcome === 'stale_block') {
       logTerminal(`[Sentinel] STALE: equity_age=${data.stalenessSeconds}s exceeds max_staleness=300s`, 'log-fail');
