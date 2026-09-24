@@ -222,14 +222,14 @@ function setupWalletConnect() {
         activeProvider = provider;
         const pubkey = resp?.publicKey || provider.publicKey;
         connectedWallet = pubkey.toString();
-        const shortAddr = `${walletName}: ${connectedWallet.slice(0, 4)}...${connectedWallet.slice(-4)}`;
+        const shortAddr = `${connectedWallet.slice(0, 4)}...${connectedWallet.slice(-4)}`;
         walletText.textContent = shortAddr;
         btnWallet.classList.add('connected');
-        btnText.textContent = `Sign & Execute (${walletName})`;
+        btnText.textContent = 'Attempt Liquidation (Live)';
         
         logTerminal(`[Wallet] Connected ${walletName}: ${connectedWallet}`, 'log-success');
         logTerminal(`[Network] Solana Devnet (api.devnet.solana.com)`, 'log-info');
-        logTerminal(`[Ready] Click "Sign & Execute (${walletName})" to submit live transaction!`, 'log-success');
+        logTerminal('[Ready] Click "Attempt Liquidation (Live)" to sign and submit live transaction!', 'log-success');
 
         // Check user Devnet balance
         if (window.solanaWeb3) {
@@ -275,7 +275,7 @@ function setupExecutionHandler() {
     // ── LIVE ON-CHAIN TRANSACTION (When Solflare/Phantom is connected) ─────────────
     if (connectedWallet && activeProvider && window.solanaWeb3) {
       const walletName = activeProvider.isSolflare ? 'Solflare' : 'Wallet';
-      btnText.textContent = `Awaiting ${walletName} Signature...`;
+      btnText.textContent = 'Awaiting Signature...';
       logTerminal(`[Solana] Building Devnet transaction for ${walletName}...`, 'log-info');
       logTerminal(`Caller / Signer: ${connectedWallet}`, 'log-dim');
       logTerminal(`Target Program: Consumer (9kLnfpk3dD2hqdG987oac7UXK1j67yLC41s45ebbujj9)`, 'log-dim');
@@ -342,13 +342,13 @@ function setupExecutionHandler() {
         logTerminal(`SUCCESS: On-Chain Transaction Mined on Devnet!`, 'log-success');
         logTerminal(`Live Solscan: <a href="https://solscan.io/tx/${txSignature}?cluster=devnet" target="_blank" style="color:#38bdf8;text-decoration:underline;">View Your Confirmed Solscan Tx ↗</a>`, 'log-info');
         btnText.textContent = `✅ Confirmed on Devnet!`;
-        setTimeout(() => { btnText.textContent = `Sign & Execute (${walletName})`; }, 4000);
+        setTimeout(() => { btnText.textContent = 'Attempt Liquidation (Live)'; }, 4000);
       } catch (err) {
         logTerminal(`[${walletName}] ${err.message || 'Transaction rejected or failed'}`, 'log-fail');
         if (err.message && err.message.includes('0x0')) {
           logTerminal(`[Notice] Account already initialized or requires Devnet SOL.`, 'log-warn');
         }
-        btnText.textContent = `Sign & Execute (${walletName})`;
+        btnText.textContent = 'Attempt Liquidation (Live)';
       }
 
       btnSpinner.classList.add('hidden');
