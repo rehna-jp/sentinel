@@ -1,9 +1,7 @@
-// ── Sentinel Dashboard Controller ──────────────────────────────────────────
-
 const SCENARIOS = {
   safe: {
     status: 'safe',
-    pillText: '🟢 SAFE TO TRADE',
+    pillText: '🟢 SAFE TO ACT',
     headline: 'Both price feeds are fresh and aligned. Safe to execute.',
     explanation: 'Real-world equity (Pyth) and on-chain tokenized stock (xStock) prices are synchronized within 10.8 bps. No price drift detected.',
     equityPrice: 184.50,
@@ -15,8 +13,12 @@ const SCENARIOS = {
     spreadBadgeClass: 'green',
     verdictClass: 'safe',
     verdictText: '🟢 SAFE',
-    consumerEligibility: 'Position is eligible for liquidation (LTV 75.80% > 75.00%). Sentinel CPI will verify price safety.',
+    consumerEligibility: 'Position eligible for liquidation (LTV 75.80% > 75.00%). Sentinel CPI check must return Safe to proceed.',
     liquidationOutcome: 'success',
+    gaugeWidth: '5.4%',
+    gaugeClass: 'green',
+    gaugeStat: '10.8 bps / 200 bps Revert Ceiling (5.4%)',
+    ambientGlow: 'radial-gradient(circle, rgba(0, 245, 160, 0.4) 0%, rgba(56, 189, 248, 0.15) 60%, transparent 80%)',
   },
   stale: {
     status: 'stale',
@@ -34,6 +36,10 @@ const SCENARIOS = {
     verdictText: '🔴 STALE (8m 14s)',
     consumerEligibility: 'Liquidation ATTEMPT BLOCKED by Sentinel: Reference price timestamp is 494s old (limit 300s).',
     liquidationOutcome: 'stale_block',
+    gaugeWidth: '100%',
+    gaugeClass: 'red',
+    gaugeStat: 'FEED EXPIRED (494s > 300s limit) — CIRCUIT BREAKER TRIGGERED',
+    ambientGlow: 'radial-gradient(circle, rgba(255, 51, 102, 0.4) 0%, rgba(239, 68, 68, 0.15) 60%, transparent 80%)',
   },
   divergent: {
     status: 'divergent',
@@ -51,6 +57,10 @@ const SCENARIOS = {
     verdictText: '🟠 DIVERGENT (312 bps)',
     consumerEligibility: 'Liquidation ATTEMPT BLOCKED by Sentinel: Spread 312 bps exceeds maximum safety tolerance (200 bps).',
     liquidationOutcome: 'divergent_block',
+    gaugeWidth: '100%',
+    gaugeClass: 'orange',
+    gaugeStat: '311.6 bps / 200 bps Limit (+155.8% Over Ceiling) — REVERT 6002',
+    ambientGlow: 'radial-gradient(circle, rgba(255, 153, 0, 0.4) 0%, rgba(245, 158, 11, 0.15) 60%, transparent 80%)',
   },
 };
 
@@ -58,7 +68,7 @@ let currentScenario = 'safe';
 let secondsAgo = 2;
 let isExecuting = false;
 
-// ── DOM References ────────────────────────────────────────────────────────────
+// DOM References
 const card = document.getElementById('main-status-card');
 const pill = document.getElementById('status-pill');
 const pillText = document.getElementById('status-pill-text');
@@ -67,6 +77,10 @@ const explanation = document.getElementById('status-explanation');
 const timestampEl = document.getElementById('status-timestamp');
 const metricStaleness = document.getElementById('metric-staleness');
 const metricDeviation = document.getElementById('metric-deviation');
+const ambientGlow = document.getElementById('ambient-glow');
+
+const gaugeFill = document.getElementById('gauge-fill');
+const gaugeStatText = document.getElementById('gauge-stat-text');
 
 const tableEquityPrice = document.getElementById('table-equity-price');
 const tableXstockPrice = document.getElementById('table-xstock-price');
@@ -84,7 +98,6 @@ const btnSpinner = document.getElementById('btn-spinner');
 const btnText = document.getElementById('btn-text');
 const terminalBody = document.getElementById('terminal-body');
 
-// ── Init & Scene Switcher ─────────────────────────────────────────────────────
 function init() {
   setupSceneButtons();
   setupExecutionHandler();
@@ -104,7 +117,7 @@ function setupSceneButtons() {
       currentScenario = scene;
       secondsAgo = 1;
       renderScenario(scene);
-      logTerminal(`Scene switched to: ${scene.toUpperCase()} scenario`, 'log-info');
+      logTerminal(`Scene switched: ${scene.toUpperCase()} simulation active`, 'log-info');
     });
   });
 }
@@ -112,7 +125,6 @@ function setupSceneButtons() {
 function renderScenario(sceneKey) {
   const data = SCENARIOS[sceneKey];
 
-  // Update hero status card styling & text
   card.className = `status-card ${data.status}`;
   pillText.textContent = data.pillText;
   headline.textContent = data.headline;
@@ -120,7 +132,11 @@ function renderScenario(sceneKey) {
   metricStaleness.textContent = data.staleness;
   metricDeviation.textContent = `${data.deviationBps.toFixed(1)} bps (${(data.deviationBps / 100).toFixed(2)}%)`;
 
-  // Update price comparison table
+  gaugeFill.style.width = data.gaugeWidth;
+  gaugeFill.className = `gauge-fill ${data.gaugeClass}`;
+  gaugeStatText.textContent = data.gaugeStat;
+  if (ambientGlow) ambientGlow.style.background = data.ambientGlow;
+
   tableEquityPrice.textContent = `$${data.equityPrice.toFixed(2)}`;
   tableXstockPrice.textContent = `$${data.xstockPrice.toFixed(2)}`;
 
@@ -130,7 +146,6 @@ function renderScenario(sceneKey) {
   tableVerdictTag.className = `verdict-tag ${data.verdictClass}`;
   tableVerdictTag.textContent = data.verdictText;
 
-  // Update demo position card
   const collateralValue = 10 * data.xstockPrice;
   posCollateralVal.textContent = `$${collateralValue.toFixed(2)}`;
   posColPrice.textContent = `$${data.xstockPrice.toFixed(2)}`;
@@ -139,7 +154,6 @@ function renderScenario(sceneKey) {
 
   actionStatusText.textContent = data.consumerEligibility;
 
-  // Reset button state
   btnExecute.disabled = false;
   btnText.textContent = 'Attempt Liquidation';
 }
@@ -151,7 +165,6 @@ function startStalenessTicker() {
   }, 1000);
 }
 
-// ── Interactive Terminal Simulator ───────────────────────────────────────────
 function logTerminal(msg, type = 'log-dim') {
   const now = new Date();
   const timeStr = now.toTimeString().split(' ')[0];
@@ -218,7 +231,6 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// ── Copy Code Snippet ────────────────────────────────────────────────────────
 function setupCopyButton() {
   const btnCopy = document.getElementById('btn-copy-code');
   btnCopy.addEventListener('click', () => {
@@ -241,7 +253,6 @@ require!(safety == PriceSafetyResult::Safe, ErrorCode::UnsafePrice);`;
   });
 }
 
-// ── PreStocks Public API Integration ──────────────────────────────────────────
 async function fetchPrestocksData() {
   try {
     const res = await fetch('https://prestocks.com/api/prestocks');
@@ -265,14 +276,12 @@ async function fetchPrestocksData() {
         document.getElementById('figure-token-price').textContent = `$${parseFloat(figure.tokenPrice).toFixed(2)}`;
         document.getElementById('figure-mark-price').textContent = `Mark: $${parseFloat(figure.markPrice).toFixed(2)}`;
       }
-      logTerminal(`Connected to PreStocks Public API: Live data ingested`, 'log-success');
+      logTerminal(`Connected to PreStocks Public API: Live streaming`, 'log-success');
     }
   } catch (err) {
-    // Graceful fallback to static cached values so the demo never fails
     console.warn('PreStocks fetch fallback:', err);
     logTerminal(`PreStocks API: Loaded pre-IPO catalog (cached)`, 'log-dim');
   }
 }
 
-// Start application
 window.addEventListener('DOMContentLoaded', init);

@@ -3,17 +3,21 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sentinel | Know Before You Trade — Tokenized Stock Price Safety on Solana</title>
-  <meta name="description" content="On-chain price safety gate for tokenized stocks on Solana powered by Pyth Network and PreStocks. Detects staleness and market divergence before protocols or traders act.">
+  <title>Sentinel | Institutional On-Chain Price Safety Protocol on Solana</title>
+  <meta name="description" content="Real-time on-chain price safety gate and circuit breaker for tokenized stocks on Solana powered by Pyth Network and PreStocks.">
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <!-- Ambient background glow elements -->
+  <div class="ambient-glow top-left" id="ambient-glow"></div>
+  <div class="ambient-glow bottom-right"></div>
+
   <div class="app-container">
-    <!-- Top Header -->
+    <!-- Top Navigation Header -->
     <header class="navbar">
       <div class="brand">
         <div class="brand-logo">
@@ -22,73 +26,90 @@
           </svg>
         </div>
         <div class="brand-text">
-          <span class="brand-name">SENTINEL</span>
-          <span class="brand-tag">PRICE SAFETY GATE</span>
+          <div class="brand-name-row">
+            <span class="brand-name">SENTINEL</span>
+            <span class="protocol-tag">PROTOCOL</span>
+          </div>
+          <span class="brand-tag">ON-CHAIN PRICE SAFETY &amp; CIRCUIT BREAKER</span>
         </div>
       </div>
 
       <div class="nav-badges">
-        <div class="badge badge-track">
-          <span class="badge-dot"></span>
-          Stocklana Hackathon 2026
-        </div>
         <div class="badge badge-target">
           <span class="pyth-badge">Pyth Network</span>
           <span class="divider">•</span>
-          <span class="prestocks-badge">PreStocks</span>
+          <span class="prestocks-badge">PreStocks API</span>
           <span class="divider">•</span>
-          <span class="main-badge">Infrastructure</span>
+          <span class="main-badge">CPI Primitive</span>
         </div>
         <div class="network-status">
           <span class="pulse-indicator"></span>
-          <span>Solana Devnet</span>
+          <span>Solana Devnet: Live</span>
         </div>
       </div>
     </header>
 
-    <!-- Hackathon Quick-Tour / Scene Selector for Judges -->
+    <!-- Simulation Control Deck -->
     <section class="scene-switcher-container">
-      <div class="scene-switcher-label">
-        <span class="label-icon">⚡</span>
-        <span class="label-title">JUDGE INTERACTIVE DEMO — TEST SCENARIOS:</span>
+      <div class="scene-switcher-header">
+        <div class="switcher-title-group">
+          <span class="label-icon">⚡</span>
+          <span class="label-title">SIMULATION CONTROL DECK</span>
+          <span class="label-sub">Test on-chain gate behavior across market states</span>
+        </div>
+        <div class="contract-pills">
+          <span class="contract-pill">Checker: <code>DfKAoENA...CrW</code></span>
+        </div>
       </div>
+
       <div class="scene-buttons" role="tablist">
         <button class="scene-btn active" id="btn-scene-safe" data-scene="safe">
-          <span class="scene-icon">🟢</span>
-          <span class="scene-info">
-            <span class="scene-title">Scene 1: Normal Trading</span>
-            <span class="scene-desc">Feeds live &lt; 5s • Spread &lt; 0.20% • Safe</span>
-          </span>
+          <div class="scene-status-dot green"></div>
+          <div class="scene-info">
+            <div class="scene-title-row">
+              <span class="scene-title">Scene 1: Normal Market</span>
+              <span class="scene-chip green">SAFE</span>
+            </div>
+            <span class="scene-desc">Feeds live (&lt;5s) • Spread 11 bps • Execution allowed</span>
+          </div>
         </button>
 
         <button class="scene-btn" id="btn-scene-stale" data-scene="stale">
-          <span class="scene-icon">🔴</span>
-          <span class="scene-info">
-            <span class="scene-title">Scene 2: Market Closed (2am Sun)</span>
-            <span class="scene-desc">Equity stale by 8m 14s • Blocked</span>
-          </span>
+          <div class="scene-status-dot red"></div>
+          <div class="scene-info">
+            <div class="scene-title-row">
+              <span class="scene-title">Scene 2: Market Closed (2am Sun)</span>
+              <span class="scene-chip red">STALE</span>
+            </div>
+            <span class="scene-desc">Equity stale by 8m 14s • Reverts with Error 6001</span>
+          </div>
         </button>
 
         <button class="scene-btn" id="btn-scene-divergent" data-scene="divergent">
-          <span class="scene-icon">🟠</span>
-          <span class="scene-info">
-            <span class="scene-title">Scene 3: Depeg / Liquidity Shock</span>
-            <span class="scene-desc">Spread 312 bps (Limit 200) • Blocked</span>
-          </span>
+          <div class="scene-status-dot orange"></div>
+          <div class="scene-info">
+            <div class="scene-title-row">
+              <span class="scene-title">Scene 3: Depeg / Liquidity Shock</span>
+              <span class="scene-chip orange">DIVERGENT</span>
+            </div>
+            <span class="scene-desc">Spread 312 bps (Limit 200) • Reverts with Error 6002</span>
+          </div>
         </button>
       </div>
     </section>
 
-    <!-- Main Hero: Safety Status Panel -->
+    <!-- Hero Section: Dynamic Status Beacon & Safety Gauge -->
     <main class="hero-status-section">
-      <div class="status-card" id="main-status-card">
+      <div class="status-card safe" id="main-status-card">
+        <div class="status-card-glow"></div>
+        
         <div class="status-header">
           <div class="status-pill" id="status-pill">
             <span class="status-beacon"></span>
-            <span id="status-pill-text">SAFE TO TRADE</span>
+            <span id="status-pill-text">SAFE TO ACT</span>
           </div>
           <div class="status-timing">
-            <span class="status-timer-label">VERIFIED VIA ON-CHAIN SENTINEL CHECKER</span>
+            <span class="status-timer-label">ON-CHAIN SENTINEL VERIFICATION</span>
             <span class="status-timestamp" id="status-timestamp">Last checked: 2 seconds ago</span>
           </div>
         </div>
@@ -100,32 +121,53 @@
           </p>
         </div>
 
+        <!-- Visual Deviation Barometer -->
+        <div class="safety-gauge-container">
+          <div class="gauge-header">
+            <span class="gauge-title">Real-Time Spread vs Circuit Breaker Threshold</span>
+            <span class="gauge-stats" id="gauge-stat-text">10.8 bps / 200 bps Revert Ceiling (5.4%)</span>
+          </div>
+          <div class="gauge-track-wrap">
+            <div class="gauge-track">
+              <div class="gauge-fill green" id="gauge-fill" style="width: 5.4%;"></div>
+              <div class="gauge-ceiling-marker" style="left: 66.6%;">
+                <span class="marker-line"></span>
+                <span class="marker-label">200 bps Limit</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Key Metrics Cards -->
         <div class="status-metrics">
           <div class="metric-item">
             <span class="metric-label">Max Allowed Staleness</span>
             <span class="metric-value">300s (5.0 min)</span>
           </div>
           <div class="metric-item">
-            <span class="metric-label">Current Feed Staleness</span>
+            <span class="metric-label">Feed Staleness</span>
             <span class="metric-value" id="metric-staleness">4s (Fresh)</span>
           </div>
           <div class="metric-item">
-            <span class="metric-label">Max Allowed Spread</span>
+            <span class="metric-label">Revert Spread Limit</span>
             <span class="metric-value">200 bps (2.00%)</span>
           </div>
           <div class="metric-item">
-            <span class="metric-label">Current Deviation</span>
+            <span class="metric-label">Observed Spread</span>
             <span class="metric-value" id="metric-deviation">10.8 bps (0.11%)</span>
           </div>
         </div>
       </div>
     </main>
 
-    <!-- Price Discovery Chain: 3-Layer Comparative Matrix -->
+    <!-- Price Discovery Chain Matrix -->
     <section class="price-chain-section">
       <div class="section-title-wrap">
-        <h2>Full Price Discovery Chain</h2>
-        <span class="section-subtitle">Real-time cross-market valuation for tokenized equities on Solana</span>
+        <div class="title-row">
+          <h2>Full Price Discovery Chain</h2>
+          <span class="live-badge"><span class="live-dot"></span>STREAMING DATA</span>
+        </div>
+        <span class="section-subtitle">Unified valuation matrix across Private Markets (Pre-IPO), On-Chain Tokenized Pools, and Traditional Equities</span>
       </div>
 
       <div class="table-container">
@@ -135,27 +177,24 @@
               <th>Asset</th>
               <th>
                 <div class="th-header blue-glow">
-                  <span class="th-dot blue"></span>
-                  <span>Pre-IPO Tier</span>
-                  <span class="th-source">PreStocks API</span>
+                  <span class="th-label"><span class="th-dot blue"></span> Pre-IPO Valuation</span>
+                  <span class="th-source">PreStocks Live API</span>
                 </div>
               </th>
               <th>
                 <div class="th-header yellow-glow">
-                  <span class="th-dot yellow"></span>
-                  <span>On-Chain Token (xStock)</span>
+                  <span class="th-label"><span class="th-dot yellow"></span> Tokenized Stock (xStock)</span>
                   <span class="th-source">Pyth Crypto Feed</span>
                 </div>
               </th>
               <th>
                 <div class="th-header green-glow">
-                  <span class="th-dot green"></span>
-                  <span>Real-World Equity</span>
-                  <span class="th-source">Pyth Equity Feed</span>
+                  <span class="th-label"><span class="th-dot green"></span> Real-World Equity</span>
+                  <span class="th-source">Pyth US Equity Feed</span>
                 </div>
               </th>
               <th>Spread vs Real</th>
-              <th>Sentinel Verdict</th>
+              <th>Sentinel State</th>
             </tr>
           </thead>
           <tbody id="price-table-body">
@@ -163,10 +202,10 @@
             <tr class="highlight-row">
               <td class="asset-cell">
                 <div class="asset-badge">
-                  <div class="asset-logo">🍎</div>
+                  <div class="asset-logo apple">AAPL</div>
                   <div>
                     <span class="asset-name">Apple Inc.</span>
-                    <span class="asset-symbol">AAPL / AAPLX</span>
+                    <span class="asset-symbol">AAPL / AAPLX (Solana)</span>
                   </div>
                 </div>
               </td>
@@ -175,11 +214,11 @@
                 <span class="subtext">Public Equity</span>
               </td>
               <td class="price-cell">
-                <span class="price-val" id="table-xstock-price">$184.70</span>
+                <span class="price-val" id="table-xstock-price">.70</span>
                 <span class="subtext" id="table-xstock-sub">Feed: Crypto.AAPLX/USD</span>
               </td>
               <td class="price-cell">
-                <span class="price-val" id="table-equity-price">$184.50</span>
+                <span class="price-val" id="table-equity-price">.50</span>
                 <span class="subtext" id="table-equity-sub">Feed: Equity.US.AAPL/USD</span>
               </td>
               <td class="spread-cell" id="table-spread-cell">
@@ -194,16 +233,16 @@
             <tr class="prestocks-row">
               <td class="asset-cell">
                 <div class="asset-badge">
-                  <div class="asset-logo">🛡️</div>
+                  <div class="asset-logo anduril">AND</div>
                   <div>
-                    <span class="asset-name">Anduril PreStocks</span>
-                    <span class="asset-symbol">ANDURIL (Pre-IPO)</span>
+                    <span class="asset-name">Anduril Industries</span>
+                    <span class="asset-symbol">ANDURIL (Pre-IPO Token)</span>
                   </div>
                 </div>
               </td>
               <td class="price-cell prestocks-cell">
-                <span class="price-val" id="anduril-token-price">$155.12</span>
-                <span class="subtext" id="anduril-mark-price">Mark: $152.78</span>
+                <span class="price-val cyan-val" id="anduril-token-price">.12</span>
+                <span class="subtext" id="anduril-mark-price">Mark: .78</span>
               </td>
               <td class="price-cell">
                 <span class="price-na">—</span>
@@ -214,7 +253,7 @@
                 <span class="subtext">Private Market</span>
               </td>
               <td class="spread-cell">
-                <span class="pre-ipo-pill">Valuation: $135.2B</span>
+                <span class="pre-ipo-pill">Valuation: .2B</span>
               </td>
               <td class="verdict-cell">
                 <span class="verdict-tag pre-ipo">🔵 PRE-IPO</span>
@@ -224,16 +263,16 @@
             <tr class="prestocks-row">
               <td class="asset-cell">
                 <div class="asset-badge">
-                  <div class="asset-logo">🤖</div>
+                  <div class="asset-logo anthropic">ANT</div>
                   <div>
-                    <span class="asset-name">Anthropic PreStocks</span>
-                    <span class="asset-symbol">ANTHROPIC (Pre-IPO)</span>
+                    <span class="asset-name">Anthropic</span>
+                    <span class="asset-symbol">ANTHROPIC (Pre-IPO Token)</span>
                   </div>
                 </div>
               </td>
               <td class="price-cell prestocks-cell">
-                <span class="price-val" id="anthropic-token-price">$1,010.75</span>
-                <span class="subtext" id="anthropic-mark-price">Mark: $1,036.96</span>
+                <span class="price-val cyan-val" id="anthropic-token-price">,010.75</span>
+                <span class="subtext" id="anthropic-mark-price">Mark: ,036.96</span>
               </td>
               <td class="price-cell">
                 <span class="price-na">—</span>
@@ -244,7 +283,7 @@
                 <span class="subtext">Private Market</span>
               </td>
               <td class="spread-cell">
-                <span class="pre-ipo-pill">Valuation: $1.70T</span>
+                <span class="pre-ipo-pill">Valuation: .70T</span>
               </td>
               <td class="verdict-cell">
                 <span class="verdict-tag pre-ipo">🔵 PRE-IPO</span>
@@ -254,16 +293,16 @@
             <tr class="prestocks-row">
               <td class="asset-cell">
                 <div class="asset-badge">
-                  <div class="asset-logo">🦾</div>
+                  <div class="asset-logo figure">FIG</div>
                   <div>
-                    <span class="asset-name">Figure AI PreStocks</span>
-                    <span class="asset-symbol">FIGUREAI (Pre-IPO)</span>
+                    <span class="asset-name">Figure AI</span>
+                    <span class="asset-symbol">FIGUREAI (Pre-IPO Token)</span>
                   </div>
                 </div>
               </td>
               <td class="price-cell prestocks-cell">
-                <span class="price-val" id="figure-token-price">$171.95</span>
-                <span class="subtext" id="figure-mark-price">Mark: $181.19</span>
+                <span class="price-val cyan-val" id="figure-token-price">.95</span>
+                <span class="subtext" id="figure-mark-price">Mark: .19</span>
               </td>
               <td class="price-cell">
                 <span class="price-na">—</span>
@@ -274,7 +313,7 @@
                 <span class="subtext">Private Market</span>
               </td>
               <td class="spread-cell">
-                <span class="pre-ipo-pill">Valuation: $39.5B</span>
+                <span class="pre-ipo-pill">Valuation: .5B</span>
               </td>
               <td class="verdict-cell">
                 <span class="verdict-tag pre-ipo">🔵 PRE-IPO</span>
@@ -291,22 +330,22 @@
       <section class="demo-card">
         <div class="card-header">
           <div>
-            <h3>On-Chain Consumer Gate Demo</h3>
-            <span class="card-subtitle">Program: <code>9kLnfpk3d...ebbujj9</code> calls Sentinel via CPI</span>
+            <h3>Consumer Lending Protocol Gate</h3>
+            <span class="card-subtitle">Program: <code>9kLnfpk3d...ebbujj9</code> gates executions via Sentinel CPI</span>
           </div>
-          <span class="badge-toy">Demo Protocol</span>
+          <span class="badge-toy">Live Devnet Demo</span>
         </div>
 
         <div class="position-overview">
           <div class="pos-item">
-            <span class="pos-title">Collateral</span>
-            <span class="pos-num" id="pos-collateral-val">$1,847.00</span>
-            <span class="pos-sub">10.00 AAPLX @ <span id="pos-col-price">$184.70</span></span>
+            <span class="pos-title">Collateral Staked</span>
+            <span class="pos-num" id="pos-collateral-val">,847.00</span>
+            <span class="pos-sub">10.00 AAPLX @ <span id="pos-col-price">.70</span></span>
           </div>
           <div class="pos-divider"></div>
           <div class="pos-item">
             <span class="pos-title">Borrowed Debt</span>
-            <span class="pos-num">$1,400.00</span>
+            <span class="pos-num">,400.00</span>
             <span class="pos-sub">USDC Borrowed</span>
           </div>
           <div class="pos-divider"></div>
@@ -320,7 +359,7 @@
         <div class="action-banner">
           <div class="action-status-box" id="action-status-box">
             <span class="action-status-dot"></span>
-            <span id="action-status-text">Position is eligible for liquidation (LTV 75.80% &gt; 75.00%). Sentinel CPI check will gate execution.</span>
+            <span id="action-status-text">Position eligible for liquidation (LTV 75.80% &gt; 75.00%). Sentinel CPI check must return Safe to proceed.</span>
           </div>
 
           <button class="btn-execute" id="btn-execute-liquidate">
@@ -335,11 +374,11 @@
             <div class="terminal-dots">
               <span></span><span></span><span></span>
             </div>
-            <span class="terminal-title">Solana CPI Execution Log</span>
+            <span class="terminal-title">Solana CPI Transaction Log Stream</span>
             <span class="terminal-network">devnet</span>
           </div>
           <div class="terminal-body" id="terminal-body">
-            <div class="log-line"><span class="log-dim">[00:00:00]</span> <span class="log-info">Ready.</span> Click "Attempt Liquidation" or switch test scenarios above.</div>
+            <div class="log-line"><span class="log-dim">[00:00:00]</span> <span class="log-info">Ready.</span> Click "Attempt Liquidation" or switch market scenarios above.</div>
           </div>
         </div>
       </section>
@@ -349,14 +388,14 @@
         <div class="card-header">
           <div>
             <h3>One-Line Protocol Integration</h3>
-            <span class="card-subtitle">CPI-callable primitive for Solana DEXs, Perps, & Lending</span>
+            <span class="card-subtitle">Composable safety primitive for Solana DEXs, Perps, &amp; Lending</span>
           </div>
-          <span class="badge-dev">For Developers</span>
+          <span class="badge-dev">Developer API</span>
         </div>
 
         <div class="cpi-explainer">
           <p>
-            Any Solana protocol trading tokenized stocks can gate their orders, liquidations, or oracle queries by calling Sentinel before acting:
+            Any Solana protocol can gate order fills, liquidations, or oracle consumption by invoking Sentinel via CPI before acting on prices:
           </p>
         </div>
 
@@ -388,11 +427,15 @@
         <div class="deployed-contracts">
           <div class="contract-entry">
             <span class="contract-name">Sentinel Program ID:</span>
-            <code class="contract-address">DfKAoENAneWyLgwt5BKP7PfigPG8Phfv3nywLZnhfCrW</code>
+            <a href="https://solscan.io/account/DfKAoENAneWyLgwt5BKP7PfigPG8Phfv3nywLZnhfCrW?cluster=devnet" target="_blank" class="contract-link">
+              <code class="contract-address">DfKAoENAneWyLgwt5BKP7PfigPG8Phfv3nywLZnhfCrW</code> ↗
+            </a>
           </div>
           <div class="contract-entry">
             <span class="contract-name">Consumer Program ID:</span>
-            <code class="contract-address">9kLnfpk3dD2hqdG987oac7UXK1j67yLC41s45ebbujj9</code>
+            <a href="https://solscan.io/account/9kLnfpk3dD2hqdG987oac7UXK1j67yLC41s45ebbujj9?cluster=devnet" target="_blank" class="contract-link">
+              <code class="contract-address">9kLnfpk3dD2hqdG987oac7UXK1j67yLC41s45ebbujj9</code> ↗
+            </a>
           </div>
           <div class="contract-entry">
             <span class="contract-name">Pyth Equity Feed:</span>
@@ -409,14 +452,15 @@
     <!-- Footer -->
     <footer class="footer">
       <div class="footer-left">
-        <span>Built for <strong>Stocklana 2026</strong> (Solana Foundation Hackathon)</span>
+        <span><strong>Sentinel Protocol</strong> — High-Assurance Price Safety for Solana Tokenized Equities</span>
         <span class="footer-dot">•</span>
-        <span>Pyth Network Bounty &amp; PreStocks Bounty Track</span>
+        <span>Powered by Pyth Network &amp; PreStocks Oracle Feeds</span>
       </div>
       <div class="footer-right">
-        <span>Team Solo (Rehna)</span>
-        <span class="footer-dot">•</span>
-        <a href="https://github.com" target="_blank" rel="noreferrer">GitHub Repository</a>
+        <a href="https://github.com/rehna-jp/sentinel" target="_blank" rel="noreferrer" class="github-link">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+          github.com/rehna-jp/sentinel
+        </a>
       </div>
     </footer>
   </div>
