@@ -178,32 +178,66 @@ function logTerminal(msg, type = 'log-dim') {
 
 let connectedWallet = null;
 
+function getSolanaProvider() {
+  if (window.phantom?.solana?.isPhantom) {
+    return window.phantom.solana;
+  }
+  if (window.solana) {
+    return window.solana;
+  }
+  if (window.solflare?.isSolflare) {
+    return window.solflare;
+  }
+  return null;
+}
+
 function setupWalletConnect() {
   const btnWallet = document.getElementById('btn-wallet');
   const walletText = document.getElementById('wallet-text');
   if (!btnWallet) return;
 
   btnWallet.addEventListener('click', async () => {
-    if (window.solana && window.solana.isPhantom) {
+    // If already connected, clicking disconnects
+    if (connectedWallet) {
+      const provider = getSolanaProvider();
+      if (provider && provider.disconnect) {
+        try { await provider.disconnect(); } catch (e) {}
+      }
+      connectedWallet = null;
+      walletText.textContent = 'Connect Wallet';
+      btnWallet.classList.remove('connected');
+      logTerminal('[Wallet] Disconnected. Running in Simulation Mode.', 'log-dim');
+      return;
+    }
+
+    const provider = getSolanaProvider();
+
+    if (provider) {
       try {
-        const resp = await window.solana.connect();
-        connectedWallet = resp.publicKey.toString();
+        logTerminal('[Wallet] Requesting wallet signature / connection...', 'log-info');
+        const resp = await provider.connect();
+        connectedWallet = (resp.publicKey || provider.publicKey).toString();
         const shortAddr = `${connectedWallet.slice(0, 4)}...${connectedWallet.slice(-4)}`;
         walletText.textContent = shortAddr;
         btnWallet.classList.add('connected');
-        logTerminal(`[Wallet] Connected Phantom: ${connectedWallet}`, 'log-success');
-        logTerminal(`[Solana] Cluster: https://api.devnet.solana.com`, 'log-info');
-        logTerminal(`[Sentinel] Active Config PDA: AX56ApDR...Zi4y`, 'log-dim');
+        logTerminal(`[Wallet] Successfully connected: ${connectedWallet}`, 'log-success');
+        logTerminal(`[Network] Solana Devnet (api.devnet.solana.com)`, 'log-info');
+        logTerminal(`[Sentinel] Config PDA: AX56ApDR...Zi4y`, 'log-dim');
       } catch (err) {
-        logTerminal(`[Wallet] Connection cancelled: ${err.message}`, 'log-warn');
+        logTerminal(`[Wallet] Connection declined or closed: ${err.message || err}`, 'log-warn');
       }
     } else {
-      connectedWallet = '296KKHsmDSA2ENiJ4YdDZ62Hrw5JePKYBtfV3MSsSGnW';
-      walletText.textContent = '296K...SGnW';
-      btnWallet.classList.add('connected');
-      logTerminal(`[Wallet] Connected Protocol Signer: 296KKHsmDSA2ENiJ4YdDZ62Hrw5JePKYBtfV3MSsSGnW`, 'log-success');
-      logTerminal(`[Solana] Cluster: https://api.devnet.solana.com`, 'log-info');
-      logTerminal(`[Sentinel] Active Config PDA: AX56ApDR...Zi4y`, 'log-dim');
+      logTerminal('------------------------------------------------', 'log-dim');
+      logTerminal('[Notice] No Solana wallet extension detected in this browser.', 'log-warn');
+      logTerminal('Install Phantom at https://phantom.app to connect your personal wallet.', 'log-info');
+      logTerminal('You can still test all 3 on-chain invariant gates below in Simulation Mode!', 'log-success');
+      
+      const openInstall = confirm(
+        "No Solana wallet (Phantom or Solflare) detected in this browser.\n\nWould you like to open https://phantom.app to install it?\n\n(You can also continue using the full interactive simulation without a wallet!)"
+      );
+      if (openInstall) {
+        window.open('https://phantom.app/', '_blank');
+      }
     }
   });
 }
@@ -216,11 +250,14 @@ function setupExecutionHandler() {
     btnSpinner.classList.remove('hidden');
     btnText.textContent = 'Executing CPI Call...';
 
-    const signer = connectedWallet || '296KKHsmDSA2ENiJ4YdDZ62Hrw5JePKYBtfV3MSsSGnW';
     const data = SCENARIOS[currentScenario];
     logTerminal(`------------------------------------------------`, 'log-dim');
     logTerminal(`TX SUBMIT: Call consumer::attempt_liquidate()`, 'log-info');
-    logTerminal(`Signer: ${signer.slice(0, 4)}...${signer.slice(-4)} | Cluster: Devnet`, 'log-dim');
+    if (connectedWallet) {
+      logTerminal(`Signer (Connected Wallet): ${connectedWallet.slice(0, 4)}...${connectedWallet.slice(-4)} | Cluster: Devnet`, 'log-info');
+    } else {
+      logTerminal(`Mode: Interactive CPI Protocol Simulation (Devnet Invariants)`, 'log-dim');
+    }
     logTerminal(`Consumer Program: 9kLnfpk3dD2hqdG987oac7UXK1j67yLC41s45ebbujj9`, 'log-dim');
     logTerminal(`Position PDA: AtUoyDs4psDSXALKHp39CjUJEm4oLRyEjDEvicoR6aQD`, 'log-dim');
 
