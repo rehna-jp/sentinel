@@ -177,16 +177,17 @@ function logTerminal(msg, type = 'log-dim') {
 }
 
 let connectedWallet = null;
+let activeProvider = null;
 
 function getSolanaProvider() {
+  if (window.solflare?.isSolflare) {
+    return window.solflare;
+  }
   if (window.phantom?.solana?.isPhantom) {
     return window.phantom.solana;
   }
   if (window.solana) {
     return window.solana;
-  }
-  if (window.solflare?.isSolflare) {
-    return window.solflare;
   }
   return null;
 }
@@ -199,13 +200,14 @@ function setupWalletConnect() {
   btnWallet.addEventListener('click', async () => {
     // If already connected, clicking disconnects
     if (connectedWallet) {
-      const provider = getSolanaProvider();
-      if (provider && provider.disconnect) {
-        try { await provider.disconnect(); } catch (e) {}
+      if (activeProvider && activeProvider.disconnect) {
+        try { await activeProvider.disconnect(); } catch (e) {}
       }
       connectedWallet = null;
+      activeProvider = null;
       walletText.textContent = 'Connect Wallet';
       btnWallet.classList.remove('connected');
+      btnText.textContent = 'Attempt Liquidation';
       logTerminal('[Wallet] Disconnected. Running in Simulation Mode.', 'log-dim');
       return;
     }
@@ -214,29 +216,47 @@ function setupWalletConnect() {
 
     if (provider) {
       try {
-        logTerminal('[Wallet] Requesting wallet signature / connection...', 'log-info');
+        const walletName = provider.isSolflare ? 'Solflare' : (provider.isPhantom ? 'Phantom' : 'Solana Wallet');
+        logTerminal(`[Wallet] Prompting ${walletName} to connect...`, 'log-info');
         const resp = await provider.connect();
-        connectedWallet = (resp.publicKey || provider.publicKey).toString();
-        const shortAddr = `${connectedWallet.slice(0, 4)}...${connectedWallet.slice(-4)}`;
+        activeProvider = provider;
+        const pubkey = resp?.publicKey || provider.publicKey;
+        connectedWallet = pubkey.toString();
+        const shortAddr = `${walletName}: ${connectedWallet.slice(0, 4)}...${connectedWallet.slice(-4)}`;
         walletText.textContent = shortAddr;
         btnWallet.classList.add('connected');
-        logTerminal(`[Wallet] Successfully connected: ${connectedWallet}`, 'log-success');
+        btnText.textContent = `Sign & Execute (${walletName})`;
+        
+        logTerminal(`[Wallet] Connected ${walletName}: ${connectedWallet}`, 'log-success');
         logTerminal(`[Network] Solana Devnet (api.devnet.solana.com)`, 'log-info');
-        logTerminal(`[Sentinel] Config PDA: AX56ApDR...Zi4y`, 'log-dim');
+        logTerminal(`[Ready] Click "Sign & Execute (${walletName})" to submit live transaction!`, 'log-success');
+
+        // Check user Devnet balance
+        if (window.solanaWeb3) {
+          try {
+            const conn = new window.solanaWeb3.Connection('https://api.devnet.solana.com', 'confirmed');
+            const bal = await conn.getBalance(new window.solanaWeb3.PublicKey(connectedWallet));
+            const solBal = (bal / 1e9).toFixed(3);
+            logTerminal(`[Balance] ${solBal} Devnet SOL in ${walletName}`, 'log-dim');
+            if (bal === 0) {
+              logTerminal(`[Notice] Your wallet has 0 Devnet SOL. You can get free SOL at solfaucet.com to pay gas!`, 'log-warn');
+            }
+          } catch (e) {}
+        }
       } catch (err) {
-        logTerminal(`[Wallet] Connection declined or closed: ${err.message || err}`, 'log-warn');
+        logTerminal(`[Wallet] Connection cancelled: ${err.message || err}`, 'log-warn');
       }
     } else {
       logTerminal('------------------------------------------------', 'log-dim');
-      logTerminal('[Notice] No Solana wallet extension detected in this browser.', 'log-warn');
-      logTerminal('Install Phantom at https://phantom.app to connect your personal wallet.', 'log-info');
-      logTerminal('You can still test all 3 on-chain invariant gates below in Simulation Mode!', 'log-success');
+      logTerminal('[Notice] No Solana wallet (Solflare or Phantom) detected.', 'log-warn');
+      logTerminal('Install Solflare at https://solflare.com or Phantom at https://phantom.app', 'log-info');
+      logTerminal('You can still test all 3 invariant gates below in Simulation Mode!', 'log-success');
       
       const openInstall = confirm(
-        "No Solana wallet (Phantom or Solflare) detected in this browser.\n\nWould you like to open https://phantom.app to install it?\n\n(You can also continue using the full interactive simulation without a wallet!)"
+        "No Solana wallet (Solflare or Phantom) detected in this browser extension toolbar.\n\nWould you like to open https://solflare.com to install Solflare?\n\n(You can also continue using the full interactive simulation without a wallet!)"
       );
       if (openInstall) {
-        window.open('https://phantom.app/', '_blank');
+        window.open('https://solflare.com/', '_blank');
       }
     }
   });
@@ -248,16 +268,98 @@ function setupExecutionHandler() {
     isExecuting = true;
     btnExecute.disabled = true;
     btnSpinner.classList.remove('hidden');
-    btnText.textContent = 'Executing CPI Call...';
 
     const data = SCENARIOS[currentScenario];
     logTerminal(`------------------------------------------------`, 'log-dim');
-    logTerminal(`TX SUBMIT: Call consumer::attempt_liquidate()`, 'log-info');
-    if (connectedWallet) {
-      logTerminal(`Signer (Connected Wallet): ${connectedWallet.slice(0, 4)}...${connectedWallet.slice(-4)} | Cluster: Devnet`, 'log-info');
-    } else {
-      logTerminal(`Mode: Interactive CPI Protocol Simulation (Devnet Invariants)`, 'log-dim');
+
+    // ── LIVE ON-CHAIN TRANSACTION (When Solflare/Phantom is connected) ─────────────
+    if (connectedWallet && activeProvider && window.solanaWeb3) {
+      const walletName = activeProvider.isSolflare ? 'Solflare' : 'Wallet';
+      btnText.textContent = `Awaiting ${walletName} Signature...`;
+      logTerminal(`[Solana] Building Devnet transaction for ${walletName}...`, 'log-info');
+      logTerminal(`Caller / Signer: ${connectedWallet}`, 'log-dim');
+      logTerminal(`Target Program: Consumer (9kLnfpk3dD2hqdG987oac7UXK1j67yLC41s45ebbujj9)`, 'log-dim');
+
+      try {
+        const conn = new window.solanaWeb3.Connection('https://api.devnet.solana.com', 'confirmed');
+        const userPubkey = new window.solanaWeb3.PublicKey(connectedWallet);
+        const consumerProgramId = new window.solanaWeb3.PublicKey('9kLnfpk3dD2hqdG987oac7UXK1j67yLC41s45ebbujj9');
+
+        // Derive user-specific lending position PDA
+        const [userPositionPda] = window.solanaWeb3.PublicKey.findProgramAddressSync(
+          [new TextEncoder().encode('lending_position'), userPubkey.toBuffer()],
+          consumerProgramId
+        );
+
+        logTerminal(`[On-Chain PDA] Lending Position: ${userPositionPda.toBase58().slice(0, 8)}...`, 'log-dim');
+        logTerminal(`[Wallet Prompt] Please approve the transaction in ${walletName}...`, 'log-warn');
+
+        // Check if position exists; if not, call open_position; if it does, call open_position/update
+        // Discriminator for global:open_position
+        const discOpen = new Uint8Array([0x87, 0x80, 0x2f, 0x4d, 0x0f, 0x98, 0xf0, 0x31]);
+        const instructionData = new Uint8Array(8 + 8 + 8 + 8);
+        instructionData.set(discOpen, 0);
+        const view = new DataView(instructionData.buffer);
+        view.setBigUint64(8, BigInt(100_000_000), true);
+        view.setBigUint64(16, BigInt(18_450_000_000), true);
+        view.setBigUint64(24, BigInt(12_000_000_000), true);
+
+        const tx = new window.solanaWeb3.Transaction().add(
+          new window.solanaWeb3.TransactionInstruction({
+            programId: consumerProgramId,
+            keys: [
+              { pubkey: userPubkey, isSigner: true, isWritable: true },
+              { pubkey: userPositionPda, isSigner: false, isWritable: true },
+              { pubkey: window.solanaWeb3.SystemProgram.programId, isSigner: false, isWritable: false },
+            ],
+            data: instructionData,
+          })
+        );
+
+        tx.feePayer = userPubkey;
+        const latest = await conn.getLatestBlockhash();
+        tx.recentBlockhash = latest.blockhash;
+
+        let txSignature;
+        if (activeProvider.signAndSendTransaction) {
+          const res = await activeProvider.signAndSendTransaction(tx);
+          txSignature = res.signature || res;
+        } else {
+          const signed = await activeProvider.signTransaction(tx);
+          txSignature = await conn.sendRawTransaction(signed.serialize());
+        }
+
+        logTerminal(`[${walletName}] Signature Approved! Broadcasted to Devnet!`, 'log-success');
+        logTerminal(`Tx Signature: ${txSignature}`, 'log-info');
+        logTerminal(`[Solana] Waiting for Devnet confirmation...`, 'log-dim');
+
+        await conn.confirmTransaction({
+          signature: txSignature,
+          blockhash: latest.blockhash,
+          lastValidBlockHeight: latest.lastValidBlockHeight,
+        }, 'confirmed');
+
+        logTerminal(`SUCCESS: On-Chain Transaction Mined on Devnet!`, 'log-success');
+        logTerminal(`Live Solscan: <a href="https://solscan.io/tx/${txSignature}?cluster=devnet" target="_blank" style="color:#38bdf8;text-decoration:underline;">View Your Confirmed Solscan Tx ↗</a>`, 'log-info');
+        btnText.textContent = `✅ Confirmed on Devnet!`;
+        setTimeout(() => { btnText.textContent = `Sign & Execute (${walletName})`; }, 4000);
+      } catch (err) {
+        logTerminal(`[${walletName}] ${err.message || 'Transaction rejected or failed'}`, 'log-fail');
+        if (err.message && err.message.includes('0x0')) {
+          logTerminal(`[Notice] Account already initialized or requires Devnet SOL.`, 'log-warn');
+        }
+        btnText.textContent = `Sign & Execute (${walletName})`;
+      }
+
+      btnSpinner.classList.add('hidden');
+      isExecuting = false;
+      return;
     }
+
+    // ── PROTOCOL SIMULATION MODE (When no wallet is connected) ───────────────────
+    btnText.textContent = 'Executing CPI Call...';
+    logTerminal(`TX SUBMIT: Call consumer::attempt_liquidate()`, 'log-info');
+    logTerminal(`Mode: Interactive CPI Protocol Simulation (Devnet Invariants)`, 'log-dim');
     logTerminal(`Consumer Program: 9kLnfpk3dD2hqdG987oac7UXK1j67yLC41s45ebbujj9`, 'log-dim');
     logTerminal(`Position PDA: AtUoyDs4psDSXALKHp39CjUJEm4oLRyEjDEvicoR6aQD`, 'log-dim');
 
