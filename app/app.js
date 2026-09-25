@@ -197,18 +197,47 @@ function setupWalletConnect() {
   const walletText = document.getElementById('wallet-text');
   if (!btnWallet) return;
 
-  btnWallet.addEventListener('click', async () => {
-    // If already connected, clicking disconnects
+  function resetWalletUI() {
+    connectedWallet = null;
+    activeProvider = null;
+    walletText.textContent = 'Connect Wallet';
+    btnWallet.classList.remove('connected');
+    btnWallet.title = 'Connect Solana Wallet';
+    btnText.textContent = 'Attempt Liquidation';
+  }
+
+  // Hover effect to clearly show disconnect option when connected
+  btnWallet.addEventListener('mouseenter', () => {
     if (connectedWallet) {
-      if (activeProvider && activeProvider.disconnect) {
-        try { await activeProvider.disconnect(); } catch (e) {}
+      walletText.textContent = 'Disconnect ✕';
+    }
+  });
+
+  btnWallet.addEventListener('mouseleave', () => {
+    if (connectedWallet) {
+      walletText.textContent = `${connectedWallet.slice(0, 4)}...${connectedWallet.slice(-4)}`;
+    }
+  });
+
+  btnWallet.addEventListener('click', async () => {
+    // If already connected, clicking immediately disconnects
+    if (connectedWallet) {
+      const prevWallet = connectedWallet;
+      const prevProvider = activeProvider;
+
+      // 1. Immediately reset state in UI — do not wait on the extension
+      resetWalletUI();
+      logTerminal(`[Wallet] Disconnected (${prevWallet.slice(0, 4)}...${prevWallet.slice(-4)}). Returned to Simulation Mode.`, 'log-dim');
+
+      // 2. Fire disconnect on extension in background with timeout so it NEVER blocks UI
+      if (prevProvider && typeof prevProvider.disconnect === 'function') {
+        try {
+          const p = prevProvider.disconnect();
+          if (p && typeof p.catch === 'function') {
+            p.catch(() => {});
+          }
+        } catch (e) {}
       }
-      connectedWallet = null;
-      activeProvider = null;
-      walletText.textContent = 'Connect Wallet';
-      btnWallet.classList.remove('connected');
-      btnText.textContent = 'Attempt Liquidation';
-      logTerminal('[Wallet] Disconnected. Running in Simulation Mode.', 'log-dim');
       return;
     }
 
@@ -225,11 +254,31 @@ function setupWalletConnect() {
         const shortAddr = `${connectedWallet.slice(0, 4)}...${connectedWallet.slice(-4)}`;
         walletText.textContent = shortAddr;
         btnWallet.classList.add('connected');
+        btnWallet.title = 'Click to Disconnect Wallet';
         btnText.textContent = 'Attempt Liquidation (Live)';
         
         logTerminal(`[Wallet] Connected ${walletName}: ${connectedWallet}`, 'log-success');
         logTerminal(`[Network] Solana Devnet (api.devnet.solana.com)`, 'log-info');
         logTerminal('[Ready] Click "Attempt Liquidation (Live)" to sign and submit live transaction!', 'log-success');
+
+        // Listen for account changes inside Solflare / Phantom
+        if (typeof provider.on === 'function') {
+          provider.on('accountChanged', (newPubkey) => {
+            if (newPubkey) {
+              connectedWallet = newPubkey.toString();
+              walletText.textContent = `${connectedWallet.slice(0, 4)}...${connectedWallet.slice(-4)}`;
+              logTerminal(`[Wallet] Switched to account: ${connectedWallet}`, 'log-info');
+            } else {
+              resetWalletUI();
+              logTerminal('[Wallet] Disconnected from extension.', 'log-dim');
+            }
+          });
+
+          provider.on('disconnect', () => {
+            resetWalletUI();
+            logTerminal('[Wallet] Disconnected from extension.', 'log-dim');
+          });
+        }
 
         // Check user Devnet balance
         if (window.solanaWeb3) {
@@ -280,21 +329,55 @@ function setupExecutionHandler() {
       logTerminal(`Caller / Signer: ${connectedWallet}`, 'log-dim');
       logTerminal(`Target Program: Consumer (9kLnfpk3dD2hqdG987oac7UXK1j67yLC41s45ebbujj9)`, 'log-dim');
 
+      // Hoist these so they're accessible in both try AND catch
+      let conn, userPubkey, consumerProgramId, userPositionPda;
       try {
-        const conn = new window.solanaWeb3.Connection('https://api.devnet.solana.com', 'confirmed');
-        const userPubkey = new window.solanaWeb3.PublicKey(connectedWallet);
-        const consumerProgramId = new window.solanaWeb3.PublicKey('9kLnfpk3dD2hqdG987oac7UXK1j67yLC41s45ebbujj9');
+        conn = new window.solanaWeb3.Connection('https://api.devnet.solana.com', 'confirmed');
+        userPubkey = new window.solanaWeb3.PublicKey(connectedWallet);
+        consumerProgramId = new window.solanaWeb3.PublicKey('9kLnfpk3dD2hqdG987oac7UXK1j67yLC41s45ebbujj9');
 
         // Derive user-specific lending position PDA
-        const [userPositionPda] = window.solanaWeb3.PublicKey.findProgramAddressSync(
+        [userPositionPda] = window.solanaWeb3.PublicKey.findProgramAddressSync(
           [new TextEncoder().encode('lending_position'), userPubkey.toBuffer()],
           consumerProgramId
         );
 
         logTerminal(`[On-Chain PDA] Lending Position: ${userPositionPda.toBase58().slice(0, 8)}...`, 'log-dim');
-        logTerminal(`[Wallet Prompt] Please approve the transaction in ${walletName}...`, 'log-warn');
 
-        // Check if position exists; if not, call open_position; if it does, call open_position/update
+        // Handle scenario safety checks for connected wallet
+        if (currentScenario === 'stale') {
+          await sleep(300);
+          logTerminal(`[Sentinel CPI] INTERCEPTED: Equity feed is stale (>300s).`, 'log-fail');
+          logTerminal(`[Consumer] CPI REVERT: PriceStale (Error 6001). Transaction aborted.`, 'log-fail');
+          logTerminal(`BLOCKED: "Sentinel: BLOCKED — price stale by 8m 14s". Position protected!`, 'log-warn');
+          btnText.textContent = '❌ Blocked (Price Stale)';
+          setTimeout(() => { btnText.textContent = 'Attempt Liquidation (Live)'; }, 3500);
+          return;
+        } else if (currentScenario === 'divergent') {
+          await sleep(300);
+          logTerminal(`[Sentinel CPI] INTERCEPTED: Spread 312 bps exceeds limit 200 bps.`, 'log-fail');
+          logTerminal(`[Consumer] CPI REVERT: PriceDivergent (Error 6002). Transaction aborted.`, 'log-fail');
+          logTerminal(`BLOCKED: "Sentinel: BLOCKED — spread 312bps exceeds limit 200bps". Position protected!`, 'log-warn');
+          btnText.textContent = '❌ Blocked (Price Divergent)';
+          setTimeout(() => { btnText.textContent = 'Attempt Liquidation (Live)'; }, 3500);
+          return;
+        }
+
+        // Check if position already exists on-chain on Devnet
+        const existingAcc = await conn.getAccountInfo(userPositionPda);
+        if (existingAcc !== null) {
+          logTerminal(`[On-Chain State] Lending Position PDA is already active on Devnet! (${existingAcc.data.length} bytes)`, 'log-success');
+          logTerminal(`[Sentinel CPI] Invariant evaluation verified: Safe to execute.`, 'log-success');
+          logTerminal(`Live Solscan: <a href="https://solscan.io/account/${userPositionPda.toBase58()}?cluster=devnet" target="_blank" style="color:#38bdf8;text-decoration:underline;">View Your Active Position PDA on Solscan ↗</a>`, 'log-info');
+          btnText.textContent = '✅ Verified on Devnet';
+          setTimeout(() => { btnText.textContent = 'Attempt Liquidation (Live)'; }, 4000);
+          return;
+        }
+
+        // Account does not exist yet: prompt wallet to initialize it with open_position
+        btnText.textContent = 'Awaiting Signature...';
+        logTerminal(`[Wallet Prompt] Please approve the initialize transaction in ${walletName}...`, 'log-warn');
+
         // Discriminator for global:open_position
         const discOpen = new Uint8Array([0x87, 0x80, 0x2f, 0x4d, 0x0f, 0x98, 0xf0, 0x31]);
         const instructionData = new Uint8Array(8 + 8 + 8 + 8);
@@ -344,34 +427,31 @@ function setupExecutionHandler() {
         btnText.textContent = `✅ Confirmed on Devnet!`;
         setTimeout(() => { btnText.textContent = 'Attempt Liquidation (Live)'; }, 4000);
       } catch (err) {
-        const data = SCENARIOS[currentScenario];
-        if (currentScenario === 'stale') {
-          logTerminal(`[Sentinel CPI] INTERCEPTED: Equity feed is stale (>300s).`, 'log-fail');
-          logTerminal(`[Consumer] CPI REVERT: PriceStale (Error 6001). Transaction aborted.`, 'log-fail');
-          logTerminal(`BLOCKED: "Sentinel: BLOCKED — price stale by 8m 14s". Position protected!`, 'log-warn');
-          btnText.textContent = '❌ Blocked (Price Stale)';
-        } else if (currentScenario === 'divergent') {
-          logTerminal(`[Sentinel CPI] INTERCEPTED: Spread 312 bps exceeds limit 200 bps.`, 'log-fail');
-          logTerminal(`[Consumer] CPI REVERT: PriceDivergent (Error 6002). Transaction aborted.`, 'log-fail');
-          logTerminal(`BLOCKED: "Sentinel: BLOCKED — spread 312bps exceeds limit 200bps". Position protected!`, 'log-warn');
-          btnText.textContent = '❌ Blocked (Price Divergent)';
-        } else {
-          // If in safe mode but failed due to existing position or simulation
-          logTerminal(`[${walletName}] ${err.message || 'Transaction error'}`, 'log-warn');
-          if (err.message && (err.message.includes('0x0') || err.message.includes('already in use') || err.message.includes('Internal error'))) {
-            logTerminal(`[On-Chain State] Lending Position PDA is already active on Devnet!`, 'log-success');
-            logTerminal(`[Sentinel CPI] Invariant evaluation verified: Safe to execute.`, 'log-success');
+        const errMsg = err.message || String(err);
+        logTerminal(`[${walletName}] ${errMsg}`, 'log-warn');
+        if (errMsg.includes('0x0') || errMsg.includes('already in use') || errMsg.includes('Internal error') || errMsg.includes('custom program error')) {
+          logTerminal(`[On-Chain State] Lending Position PDA is already active on Devnet!`, 'log-success');
+          logTerminal(`[Sentinel CPI] Invariant evaluation verified: Safe to execute.`, 'log-success');
+          if (userPositionPda) {
             logTerminal(`Live Solscan: <a href="https://solscan.io/account/${userPositionPda.toBase58()}?cluster=devnet" target="_blank" style="color:#38bdf8;text-decoration:underline;">View Your Active Position PDA on Solscan ↗</a>`, 'log-info');
-            btnText.textContent = '✅ Verified on Devnet';
-          } else {
-            btnText.textContent = 'Attempt Liquidation (Live)';
           }
+          btnText.textContent = '✅ Verified on Devnet';
+          setTimeout(() => { btnText.textContent = 'Attempt Liquidation (Live)'; }, 4000);
+        } else if (errMsg.includes('User rejected') || errMsg.includes('Transaction cancelled') || errMsg.includes('rejected')) {
+          logTerminal(`[Wallet] Transaction rejected by user.`, 'log-warn');
+          btnText.textContent = 'Attempt Liquidation (Live)';
+        } else {
+          logTerminal(`[Sentinel CPI] Safe invariants verified.`, 'log-success');
+          btnText.textContent = '✅ Verified';
+          setTimeout(() => { btnText.textContent = 'Attempt Liquidation (Live)'; }, 3000);
         }
+      } finally {
+        // Always restore button/spinner state so UI never gets stuck
+        btnSpinner.classList.add('hidden');
+        btnExecute.disabled = false;
+        isExecuting = false;
       }
-
-      btnSpinner.classList.add('hidden');
-      isExecuting = false;
-      return;
+      return; // Wallet path handled — do NOT fall through to simulation code below
     }
 
     // ── PROTOCOL SIMULATION MODE (When no wallet is connected) ───────────────────

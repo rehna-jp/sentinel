@@ -1354,3 +1354,11 @@ body {
   color: #00f5a0;
   box-shadow: 0 0 12px rgba(0, 245, 160, 0.25);
 }
+
+.btn-wallet.connected:hover {
+  background: rgba(239, 68, 68, 0.18);
+  border-color: rgba(239, 68, 68, 0.6);
+  color: #f87171;
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.35);
+}
+
